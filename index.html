@@ -1,13 +1,98 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>geode-map-maker</title>
-  </head>
-  <body>
-    <div id="app"></div>
-    <script type="module" src="/src/main.ts"></script>
-  </body>
+<head>
+<meta charset="UTF-8">
+<title>RTS Map Editor</title>
+</head>
+<body>
+<div id="root">
+  <aside id="panel">
+    <section>
+      <div class="group-title">Map</div>
+      <div class="row">
+        <label>Width</label><input id="mapW" type="number" value="40" min="2" max="200" step="1">
+        <label>Length</label><input id="mapL" type="number" value="40" min="2" max="200" step="1">
+        <label>Density</label><input id="mapD" type="number" value="1" min="0.25" max="4" step="0.25">
+      </div>
+      <button id="rebuild" class="full">Rebuild map</button>
+    </section>
+
+    <section>
+      <div class="group-title">Save / load</div>
+      <div class="two-col">
+        <button id="saveBtn">Save JSON</button>
+        <button id="loadBtn">Load JSON</button>
+      </div>
+      <input id="loadFile" type="file" accept=".json,application/json" hidden>
+    </section>
+
+    <section>
+      <div class="group-title">Tool</div>
+      <div class="two-col">
+        <button data-tool="select" class="tool-btn active">Select</button>
+        <button data-tool="orbit" class="tool-btn">Orbit</button>
+        <button data-tool="place" class="tool-btn">Place</button>
+        <button data-tool="remove" class="tool-btn">Remove</button>
+      </div>
+      <div class="hint" id="toolHint">Drag to box-select. Shift to add.</div>
+    </section>
+
+    <section>
+      <div class="group-title">
+        Height <span id="selCount" class="faint">(0 selected)</span>
+      </div>
+      <div class="four-col">
+        <button id="hUp">+1</button>
+        <button id="hDown">-1</button>
+        <button id="hUpS">+0.1</button>
+        <button id="hDownS">-0.1</button>
+      </div>
+      <div class="exact-row">
+        <label>Set to</label>
+        <input id="hExact" type="number" value="0" step="0.5">
+        <button id="hApply">Set</button>
+      </div>
+      <button id="hFlat" class="full">Flatten to average</button>
+      <button id="selAll" class="full">Select all / clear</button>
+    </section>
+
+    <section>
+      <div class="group-title">Paint texture</div>
+      <div id="texGrid" class="tex-grid"></div>
+      <div class="hint">Click a swatch to paint selected vertices.</div>
+    </section>
+
+    <section>
+      <div class="group-title">Models</div>
+      <div id="modelGrid" class="two-col"></div>
+      <button id="uploadGlbBtn" class="full">Upload GLB…</button>
+      <input id="glbFile" type="file" accept=".glb,.gltf,model/gltf-binary" multiple hidden>
+      <div class="row">
+        <label>Y offset</label><input id="mY" type="number" value="0" step="0.1">
+        <label>Scale</label><input id="mScale" type="number" value="1" step="0.1" min="0.05">
+      </div>
+      <div class="hint">Place mode: click ground. Remove mode: click a model.</div>
+    </section>
+
+    <section>
+      <div class="group-title">Water & void</div>
+      <div class="row">
+        <label>Water Y</label><input id="waterY" type="number" value="-0.5" step="0.1">
+        <label>Void Y</label><input id="voidY" type="number" value="-3" step="0.1">
+      </div>
+      <label class="check-row">
+        <input id="waterOn" type="checkbox" checked> Show water
+      </label>
+    </section>
+  </aside>
+
+  <div id="viewport">
+    <div id="selBox"></div>
+    <div id="hud"></div>
+    <div id="toast"></div>
+  </div>
+</div>
+
+<script type="module" src="/src/main.ts"></script>
+</body>
 </html>
