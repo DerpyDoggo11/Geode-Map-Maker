@@ -10,7 +10,8 @@ export interface SceneBundle {
 
 /**
  * Build the core Three.js scene infrastructure and bind a ResizeObserver
- * to keep the renderer in sync with the viewport element.
+ * to keep the renderer in sync with its container. Lighting is managed
+ * separately by the Lighting class so mood can be swapped at runtime.
  */
 export function createScene(viewport: HTMLElement): SceneBundle {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -18,7 +19,6 @@ export function createScene(viewport: HTMLElement): SceneBundle {
   viewport.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0xf1efe8);
 
   const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 1000);
   camera.position.set(30, 30, 30);
@@ -26,11 +26,6 @@ export function createScene(viewport: HTMLElement): SceneBundle {
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.enabled = false; // start in select mode
-
-  const sun = new THREE.DirectionalLight(0xffffff, 1.0);
-  sun.position.set(20, 30, 15);
-  scene.add(sun);
-  scene.add(new THREE.AmbientLight(0xffffff, 0.45));
 
   const resize = (): void => {
     const w = viewport.clientWidth;

@@ -2,9 +2,11 @@ import * as THREE from 'three';
 import type { Terrain } from './terrain';
 
 /**
- * Selection set + helper Points + box-pick projection + height/paint ops.
- * The owner is responsible for calling sync() after operations that change
- * vertex positions outside this class.
+ * Selection set + helper Points + box-pick projection. Mutating operations
+ * (height edit, paint) are NOT done here anymore — callers construct
+ * Command objects and route them through the history manager so they're
+ * undoable. This class instead exposes pure helpers that compute the new
+ * values for the current selection.
  */
 export class Selection {
   private scene: THREE.Scene;
@@ -32,11 +34,7 @@ export class Selection {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
     geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
-    const mat = new THREE.PointsMaterial({
-      size: 4,
-      sizeAttenuation: false,
-      vertexColors: true,
-    });
+    const mat = new THREE.PointsMaterial({ size: 4, sizeAttenuation: false, vertexColors: true });
     this.points = new THREE.Points(geo, mat);
     this.scene.add(this.points);
     this.sync();
@@ -50,7 +48,6 @@ export class Selection {
     this.points = null;
   }
 
-  /** Copy current vertex positions into helper buffer and tint selected ones. */
   sync(): void {
     if (!this.points) return;
     const positions = this.terrain.positions;
@@ -64,9 +61,9 @@ export class Selection {
       arr[i * 3 + 1] = positions.getY(i) + 0.02;
       arr[i * 3 + 2] = positions.getZ(i);
       const sel = this.selected.has(i);
-      col[i * 3]     = sel ? 0.22 : 0.2;
-      col[i * 3 + 1] = sel ? 0.54 : 0.2;
-      col[i * 3 + 2] = sel ? 0.87 : 0.2;
+      col[i * 3]     = sel ? 0.95 : 0.5;
+      col[i * 3 + 1] = sel ? 0.85 : 0.5;
+      col[i * 3 + 2] = sel ? 0.30 : 0.5;
     }
     posAttr.needsUpdate = true;
     colAttr.needsUpdate = true;
@@ -75,16 +72,14 @@ export class Selection {
 
   clear(): void { this.selected.clear(); }
   size(): number { return this.selected.size; }
+  indices(): number[] { return Array.from(this.selected); }
+  isEmpty(): boolean { return this.selected.size === 0; }
+
   toggleAll(): void {
     if (this.selected.size === this.terrain.vertexCount) this.selected.clear();
     else for (let i = 0; i < this.terrain.vertexCount; i++) this.selected.add(i);
   }
 
-  /**
-   * Project every vertex to screen space and add the ones inside the pixel
-   * rectangle. If the rect is essentially a click, add the nearest vertex
-   * within a small radius instead.
-   */
   pickInRect(x0: number, y0: number, x1: number, y1: number, additive: boolean): void {
     if (!additive) this.selected.clear();
     const tiny = (x1 - x0) < 3 && (y1 - y0) < 3;
@@ -97,7 +92,7 @@ export class Selection {
 
     if (tiny) {
       let best = -1;
-      let bestDist = 64; // px^2 threshold
+      let bestDist = 64;
       for (let i = 0; i < n; i++) {
         v.set(positions.getX(i), positions.getY(i), positions.getZ(i)).project(this.camera);
         const sx = (v.x * 0.5 + 0.5) * r.width;
@@ -117,41 +112,30 @@ export class Selection {
     }
   }
 
-  // --- mutations ---
+  // --- pure compute helpers (caller wraps result in a HeightEditCommand) ---
 
-  adjustHeight(delta: number): void {
-    this.selected.forEach(i => {
-      this.terrain.heights[i] += delta;
-      this.terrain.positions.setY(i, this.terrain.heights[i]);
-    });
-    this.afterHeightChange();
+  /** New heights = current + delta. */
+  computeDelta(delta: number): { indices: number[]; newHeights: number[] } {
+    const indices = this.indices();
+    const newHeights = indices.map(i => this.terrain.heights[i] + delta);
+    return { indices, newHeights };
   }
 
-  setHeight(v: number): void {
-    this.selected.forEach(i => this.terrain.setHeight(i, v));
-    this.afterHeightChange();
+  /** New heights = constant v. */
+  computeSet(v: number): { indices: number[]; newHeights: number[] } {
+    const indices = this.indices();
+    const newHeights = indices.map(() => v);
+    return { indices, newHeights };
   }
 
-  flattenToAverage(): void {
-    if (this.selected.size === 0) return;
+  /** New heights = rounded average of the current selection. */
+  computeFlatten(): { indices: number[]; newHeights: number[] } | null {
+    if (this.selected.size === 0) return null;
+    const indices = this.indices();
     let avg = 0;
-    this.selected.forEach(i => { avg += this.terrain.heights[i]; });
-    avg /= this.selected.size;
+    for (const i of indices) avg += this.terrain.heights[i];
+    avg /= indices.length;
     avg = Math.round(avg * 10) / 10;
-    this.selected.forEach(i => this.terrain.setHeight(i, avg));
-    this.afterHeightChange();
-  }
-
-  paint(texIndex: number): void {
-    if (this.selected.size === 0) return;
-    this.selected.forEach(i => this.terrain.setVertexColor(i, texIndex));
-    this.terrain.colorsAttr.needsUpdate = true;
-  }
-
-  private afterHeightChange(): void {
-    this.terrain.positions.needsUpdate = true;
-    this.terrain.geo!.computeVertexNormals();
-    this.terrain.applyVoid();
-    this.sync();
+    return { indices, newHeights: indices.map(() => avg) };
   }
 }

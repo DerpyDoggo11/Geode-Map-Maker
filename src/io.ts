@@ -1,8 +1,14 @@
 import * as THREE from 'three';
-import { loadGLBFromArrayBuffer, ModelLibrary } from './models';
+import { loadGLBFromArrayBuffer, ModelLibrary, attachLight } from './models';
 import type { Terrain } from './terrain';
 import type { Water } from './water';
-import type { SaveData, SavedGLBModel, PlacedModelData } from './types';
+import type { Lighting, Mood } from './lighting';
+import type {
+  SaveData,
+  SavedGLBModel,
+  PlacedModelData,
+  AttachedLight,
+} from './types';
 
 function arrayBufferToBase64(buf: ArrayBuffer): string {
   const bytes = new Uint8Array(buf);
@@ -30,9 +36,9 @@ export interface SaveContext {
   waterY: number;
   voidY: number;
   waterOn: boolean;
+  mood: Mood;
 }
 
-/** Build the on-disk JSON shape from live editor state. */
 export function buildSaveData(ctx: SaveContext): SaveData {
   const glbModels: SavedGLBModel[] = ctx.models.defs
     .map((m, i): SavedGLBModel | null =>
@@ -42,21 +48,27 @@ export function buildSaveData(ctx: SaveContext): SaveData {
     )
     .filter((x): x is SavedGLBModel => x !== null);
 
-  const placed: PlacedModelData[] = Array.from(ctx.models.placed).map(m => ({
-    defIndex: m.userData['defIndex'] as number,
-    pos: [m.position.x, m.position.y, m.position.z],
-    rotY: m.rotation.y,
-    scale: m.scale.x,
-  }));
+  const placed: PlacedModelData[] = Array.from(ctx.models.placed).map(m => {
+    const light = m.userData['attachedLight'] as AttachedLight | undefined;
+    const out: PlacedModelData = {
+      defIndex: m.userData['defIndex'] as number,
+      pos: [m.position.x, m.position.y, m.position.z],
+      rotY: m.rotation.y,
+      scale: m.scale.x,
+    };
+    if (light) out.light = light;
+    return out;
+  });
 
   return {
-    version: 2,
+    version: 3,
     map: { width: ctx.mapW, length: ctx.mapL, density: ctx.density },
     heights: ctx.terrain.heights,
     vertColors: ctx.terrain.vertColors,
     waterY: ctx.waterY,
     voidY: ctx.voidY,
     waterOn: ctx.waterOn,
+    mood: ctx.mood,
     glbModels,
     placed,
   };
@@ -78,14 +90,26 @@ export interface LoadContext {
   terrain: Terrain;
   water: Water;
   models: ModelLibrary;
+  lighting: Lighting;
   setWaterY: (v: number) => void;
   setVoidY: (v: number) => void;
   setWaterOn: (v: boolean) => void;
   setMapInputs: (w: number, l: number, d: number) => void;
+  setMoodUI: (m: Mood) => void;
 }
 
-/** Apply a parsed save to the live editor. */
-export async function applyLoadedData(data: SaveData, ctx: LoadContext): Promise<void> {
+/** Parse and migrate older formats so v2 maps still load. */
+function normalize(raw: unknown): SaveData {
+  const data = raw as Partial<SaveData> & { version?: number };
+  if (!data || typeof data !== 'object') throw new Error('Invalid save file');
+  if (data.version === 3) return data as SaveData;
+  if (data.version === 2) return { ...(data as SaveData), version: 3, mood: 'night' };
+  throw new Error(`Unsupported save version: ${data.version}`);
+}
+
+export async function applyLoadedData(raw: unknown, ctx: LoadContext): Promise<void> {
+  const data = normalize(raw);
+
   ctx.models.stripGLBs();
   ctx.models.clearPlaced();
 
@@ -111,6 +135,9 @@ export async function applyLoadedData(data: SaveData, ctx: LoadContext): Promise
   ctx.water.setVisible(data.waterOn);
   ctx.terrain.setVoidY(data.voidY);
 
+  ctx.lighting.applyMood(data.mood);
+  ctx.setMoodUI(data.mood);
+
   if (data.glbModels?.length) {
     for (const g of data.glbModels) {
       try {
@@ -132,6 +159,7 @@ export async function applyLoadedData(data: SaveData, ctx: LoadContext): Promise
     m.scale.setScalar(p.scale || 1);
     m.userData['kind'] = 'model';
     m.userData['defIndex'] = p.defIndex;
+    if (p.light) attachLight(m, p.light);
     ctx.scene.add(m);
     ctx.models.placed.add(m);
   }

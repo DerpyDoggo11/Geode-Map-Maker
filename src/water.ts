@@ -1,6 +1,11 @@
 import * as THREE from 'three';
+import { DEFAULT_TOON_GRADIENT } from './gradientMap';
 
-/** Transparent blue plane that sits above the terrain at a configurable Y. */
+/**
+ * Cave water. Magenta-tinted so it reads as "underground pool" or "crystal
+ * spring" rather than a sky-reflecting lake. Still toon-shaded so it bands
+ * the same way as terrain.
+ */
 export class Water {
   scene: THREE.Scene;
   mesh: THREE.Mesh | null = null;
@@ -13,10 +18,11 @@ export class Water {
     this.dispose();
     const g = new THREE.PlaneGeometry(width * 1.2, length * 1.2);
     g.rotateX(-Math.PI / 2);
-    const m = new THREE.MeshStandardMaterial({
-      color: 0x378ADD,
+    const m = new THREE.MeshToonMaterial({
+      color: 0x8b3088,        // deep magenta from the warm palette
+      gradientMap: DEFAULT_TOON_GRADIENT,
       transparent: true,
-      opacity: 0.6,
+      opacity: 0.55,
     });
     this.mesh = new THREE.Mesh(g, m);
     this.mesh.position.y = y;

@@ -1,10 +1,12 @@
 import * as THREE from 'three';
 import { TEX_DEFS } from './textures';
+import { DEFAULT_TOON_GRADIENT } from './gradientMap';
 
 /**
  * The terrain grid. Owns plane geometry, per-vertex heights, per-vertex
- * texture indices, and the void-culling logic that drops triangles whose
- * every vertex sits at or below a threshold Y.
+ * texture indices, and the void-culling logic. Uses MeshToonMaterial so
+ * lighting bands into hard cel-shaded stops — point lights from buildings
+ * paint hard-edged warm pools onto the ground for free.
  */
 export class Terrain {
   scene: THREE.Scene;
@@ -16,7 +18,6 @@ export class Terrain {
   vertColors: number[] = [];
   voidY = -3;
 
-  /** Pristine triangle indices kept for void re-culling on every change. */
   private origIndex: ArrayLike<number> | null = null;
 
   constructor(scene: THREE.Scene) {
@@ -44,9 +45,11 @@ export class Terrain {
     if (!this.geo.index) throw new Error('PlaneGeometry has no index buffer');
     this.origIndex = this.geo.index.array.slice();
 
-    const mat = new THREE.MeshStandardMaterial({
+    // Toon material reads the vertex color as the diffuse, then quantizes
+    // lighting through the gradient map for the cel-shaded look.
+    const mat = new THREE.MeshToonMaterial({
       vertexColors: true,
-      flatShading: true,
+      gradientMap: DEFAULT_TOON_GRADIENT,
       side: THREE.DoubleSide,
     });
     this.mesh = new THREE.Mesh(this.geo, mat);

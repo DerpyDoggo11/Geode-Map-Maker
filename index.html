@@ -8,6 +8,15 @@
 <div id="root">
   <aside id="panel">
     <section>
+      <div class="group-title">History</div>
+      <div class="two-col">
+        <button id="undoBtn" disabled>Undo</button>
+        <button id="redoBtn" disabled>Redo</button>
+      </div>
+      <div class="hint">⌘/Ctrl+Z to undo, +Shift to redo.</div>
+    </section>
+
+    <section>
       <div class="group-title">Map</div>
       <div class="row">
         <label>Width</label><input id="mapW" type="number" value="40" min="2" max="200" step="1">
@@ -15,6 +24,15 @@
         <label>Density</label><input id="mapD" type="number" value="1" min="0.25" max="4" step="0.25">
       </div>
       <button id="rebuild" class="full">Rebuild map</button>
+    </section>
+
+    <section>
+      <div class="group-title">Mood</div>
+      <div class="three-col">
+        <button data-mood="dusk" class="mood-btn">Dusk</button>
+        <button data-mood="night" class="mood-btn active">Night</button>
+      </div>
+      <div class="hint">Night makes building lights pop.</div>
     </section>
 
     <section>
@@ -70,6 +88,15 @@
       <div class="row">
         <label>Y offset</label><input id="mY" type="number" value="0" step="0.1">
         <label>Scale</label><input id="mScale" type="number" value="1" step="0.1" min="0.05">
+      </div>
+      <label class="check-row">
+        <input id="attachLight" type="checkbox"> Attach light when placing
+      </label>
+      <div class="row">
+        <label>Light color</label><input id="lightColor" type="color" value="#d977a4">
+        <label>Intensity</label><input id="lightIntensity" type="number" value="5" min="0" step="0.5">
+        <label>Range</label><input id="lightRange" type="number" value="6" min="0" step="0.5">
+        <label>Y above origin</label><input id="lightY" type="number" value="1.2" step="0.1">
       </div>
       <div class="hint">Place mode: click ground. Remove mode: click a model.</div>
     </section>
