@@ -3,9 +3,10 @@ import { loadGLBFromArrayBuffer, ModelLibrary, attachLight } from './models';
 import type { Terrain } from './terrain';
 import type { Water } from './water';
 import type { Lighting, Mood } from './lighting';
+import { moodToLighting } from './lighting';
 import type { IslandMap } from './islandMap';
 import type { HubStyle } from './islandMap';
-import { createIslandMesh } from './island';
+import { createIslandMesh, generateIslandGeometry } from './island';
 import type {
   SaveData,
   IslandMapSaveData,
@@ -14,7 +15,9 @@ import type {
   PlacedModelData,
   AttachedLight,
   EditorState,
+  LightingConfig,
 } from './types';
+import { DEFAULT_LIGHTING } from './types';
 
 function arrayBufferToBase64(buf: ArrayBuffer): string {
   const bytes = new Uint8Array(buf);
@@ -183,7 +186,7 @@ export async function applyLoadedData(raw: unknown, ctx: LoadContext): Promise<v
 export interface IslandSaveContext {
   islandMap: IslandMap;
   models: ModelLibrary;
-  mood: Mood;
+  lighting: LightingConfig;
   editorState?: EditorState;
 }
 
@@ -211,40 +214,33 @@ export function buildIslandSaveData(ctx: IslandSaveContext): IslandMapSaveData {
   });
 
   const islands: SavedIsland[] = ctx.islandMap.islands.map(isl => {
-    const pos = isl.mesh.geometry.attributes['position'] as THREE.BufferAttribute;
-    const n = pos.count;
-    const baseData = isl.data;
-    const overrides: SavedIsland['vertexOverrides'] = [];
-    const fresh = baseData.geometry.attributes['position'] as THREE.BufferAttribute | undefined;
-    for (let i = 0; i < n; i++) {
-      if (fresh) {
-        const dx = pos.getX(i) - fresh.getX(i);
-        const dy = pos.getY(i) - fresh.getY(i);
-        const dz = pos.getZ(i) - fresh.getZ(i);
-        if (Math.abs(dx) > 1e-5 || Math.abs(dy) > 1e-5 || Math.abs(dz) > 1e-5) {
-          overrides!.push({ i, x: pos.getX(i), y: pos.getY(i), z: pos.getZ(i) });
-        }
-      }
-    }
+    const posAttr = isl.mesh.geometry.attributes['position'] as THREE.BufferAttribute;
+    const colAttr = isl.mesh.geometry.attributes['color'] as THREE.BufferAttribute | undefined;
+    const idxAttr = isl.mesh.geometry.index;
+    const positions = Array.from(posAttr.array as Float32Array);
+    const colors = colAttr ? Array.from(colAttr.array as Float32Array) : [];
+    const indices = idxAttr ? Array.from(idxAttr.array as Uint16Array | Uint32Array) : [];
     const out: SavedIsland = {
       id: isl.id,
       role: isl.role,
       pos: [isl.mesh.position.x, isl.mesh.position.y, isl.mesh.position.z],
       scale: isl.mesh.scale.x,
       params: { ...isl.params },
+      positions,
+      indices,
+      colors,
     };
-    if (overrides!.length > 0) out.vertexOverrides = overrides;
     const ag = isl.mesh.userData['angularGroup'];
     if (ag) out.angularGroup = ag;
     return out;
   });
 
   const out: IslandMapSaveData = {
-    version: 5,
+    version: 6,
     mapType: 'island',
     config: { ...ctx.islandMap.config },
     islands,
-    mood: ctx.mood,
+    lighting: { ...ctx.lighting },
     glbModels,
     placed,
   };
@@ -257,47 +253,149 @@ export interface IslandLoadContext {
   islandMap: IslandMap;
   models: ModelLibrary;
   lighting: Lighting;
-  setMoodUI: (m: Mood) => void;
+  setLightingUI: (cfg: LightingConfig) => void;
   setConfigUI: (cfg: IslandMap['config']) => void;
   rebuildSelection: () => void;
   applyEditorState: (s: EditorState) => void;
 }
 
+interface LegacyV4V5Island {
+  id: string;
+  role: 'player' | 'mid' | 'hub' | 'bridge';
+  pos: [number, number, number];
+  scale?: number;
+  params: Record<string, number>;
+  vertexOverrides?: Array<{ i: number; x: number; y: number; z: number }>;
+  angularGroup?: { size: number; index: number; baseRole: string; spokeIndex?: number };
+}
+
+interface LegacyV4V5Save {
+  version: 4 | 5;
+  mapType: 'island';
+  config: Record<string, unknown>;
+  islands: LegacyV4V5Island[];
+  mood?: Mood;
+  glbModels?: SavedGLBModel[];
+  placed?: PlacedModelData[];
+  editorState?: EditorState;
+}
+
+function migrateLegacyIslandSave(raw: LegacyV4V5Save): IslandMapSaveData {
+  const cfg = raw.config;
+  const targetEdge = typeof cfg['targetEdge'] === 'number'
+    ? (cfg['targetEdge'] as number)
+    : 1.0;
+  const subdivision = typeof cfg['subdivision'] === 'number'
+    ? (cfg['subdivision'] as number)
+    : 1;
+  const newConfig = {
+    seed: (cfg['seed'] as number) ?? 1,
+    globalScale: (cfg['globalScale'] as number) ?? 1,
+    playerCount: (cfg['playerCount'] as number) ?? 8,
+    playerRingRadius: (cfg['playerRingRadius'] as number) ?? 40,
+    playerIslandRadius: (cfg['playerIslandRadius'] as number) ?? 6,
+    playerIslandHeight: (cfg['playerIslandHeight'] as number) ?? 3.5,
+    hubStyle: (cfg['hubStyle'] as string) ?? 'connected',
+    hubRadius: (cfg['hubRadius'] as number) ?? 10,
+    hubIslandCount: (cfg['hubIslandCount'] as number) ?? 4,
+    hubLobeRadius: (cfg['hubLobeRadius'] as number) ?? 4,
+    midIslandCount: (cfg['midIslandCount'] as number) ?? 0,
+    midRingRadius: (cfg['midRingRadius'] as number) ?? 22,
+    midIslandRadius: (cfg['midIslandRadius'] as number) ?? 3.5,
+    midIslandHeight: (cfg['midIslandHeight'] as number) ?? 2.5,
+    mid2IslandCount: (cfg['mid2IslandCount'] as number) ?? 0,
+    mid2RingRadius: (cfg['mid2RingRadius'] as number) ?? 30,
+    mid2IslandRadius: (cfg['mid2IslandRadius'] as number) ?? 2.5,
+    mid2IslandHeight: (cfg['mid2IslandHeight'] as number) ?? 2,
+    bridgeIslandsPerSpoke: (cfg['bridgeIslandsPerSpoke'] as number) ?? 0,
+    bridgeIslandRadius: (cfg['bridgeIslandRadius'] as number) ?? 1.5,
+    interPlayerCount: (cfg['interPlayerCount'] as number) ?? 0,
+    interPlayerRadius: (cfg['interPlayerRadius'] as number) ?? 2,
+    interPlayerRingRadius: (cfg['interPlayerRingRadius'] as number) ?? 40,
+    shapeNoise: (cfg['shapeNoise'] as number) ?? 0.25,
+    targetEdge,
+    subdivision,
+    mirrorSymmetric: (cfg['mirrorSymmetric'] as boolean) ?? false,
+  };
+
+  const islands: SavedIsland[] = raw.islands.map(s => {
+    const params = {
+      seed: s.params['seed'] ?? 1,
+      radius: s.params['radius'] ?? 5,
+      noiseAmount: s.params['noiseAmount'] ?? 0.25,
+      targetEdge: s.params['targetEdge'] ?? targetEdge,
+      subdivision: s.params['subdivision'] ?? subdivision,
+      topHeightVariation: s.params['topHeightVariation'] ?? 0.1,
+      depth: s.params['depth'] ?? 4,
+      bottomTaper: s.params['bottomTaper'] ?? 0.15,
+    };
+    const data = generateIslandGeometryRaw(params);
+    if (s.vertexOverrides) {
+      for (const ov of s.vertexOverrides) {
+        data.positions[ov.i * 3] = ov.x;
+        data.positions[ov.i * 3 + 1] = ov.y;
+        data.positions[ov.i * 3 + 2] = ov.z;
+      }
+    }
+    return {
+      id: s.id,
+      role: s.role,
+      pos: s.pos,
+      scale: s.scale,
+      params,
+      positions: data.positions,
+      indices: data.indices,
+      colors: data.colors,
+      ...(s.angularGroup ? { angularGroup: s.angularGroup } : {}),
+    };
+  });
+
+  const lighting = raw.mood ? moodToLighting(raw.mood) : DEFAULT_LIGHTING;
+
+  return {
+    version: 6,
+    mapType: 'island',
+    config: newConfig,
+    islands,
+    lighting,
+    glbModels: raw.glbModels ?? [],
+    placed: raw.placed ?? [],
+    ...(raw.editorState ? { editorState: raw.editorState } : {}),
+  };
+}
+
+function generateIslandGeometryRaw(params: SavedIsland['params']): {
+  positions: number[];
+  indices: number[];
+  colors: number[];
+} {
+  const data = generateIslandGeometry({
+    seed: params.seed,
+    radius: params.radius,
+    noiseAmount: params.noiseAmount,
+    targetEdge: params.targetEdge,
+    subdivision: params.subdivision,
+    topHeightVariation: params.topHeightVariation,
+    depth: params.depth,
+    bottomTaper: params.bottomTaper,
+  });
+  const posAttr = data.geometry.attributes['position'] as THREE.BufferAttribute;
+  const colAttr = data.geometry.attributes['color'] as THREE.BufferAttribute | undefined;
+  const idxAttr = data.geometry.index;
+  return {
+    positions: Array.from(posAttr.array as Float32Array),
+    indices: idxAttr ? Array.from(idxAttr.array as Uint16Array | Uint32Array) : [],
+    colors: colAttr ? Array.from(colAttr.array as Float32Array) : [],
+  };
+}
+
 export async function applyIslandLoadedData(raw: unknown, ctx: IslandLoadContext): Promise<void> {
   const raw2 = raw as { version?: number };
   let data: IslandMapSaveData;
-  if (raw2.version === 5) {
+  if (raw2.version === 6) {
     data = raw as IslandMapSaveData;
-  } else if (raw2.version === 4) {
-    const v4 = raw as Partial<IslandMapSaveData> & {
-      config: Partial<IslandMapSaveData['config']>;
-      islands: Array<SavedIsland & { params: Partial<SavedIsland['params']> }>;
-    };
-    data = {
-      ...(v4 as IslandMapSaveData),
-      version: 5,
-      config: Object.assign({
-        globalScale: 1,
-        hubLobeRadius: 4,
-        mid2IslandCount: 0,
-        mid2RingRadius: 30,
-        mid2IslandRadius: 2.5,
-        mid2IslandHeight: 2,
-        interPlayerCount: 0,
-        interPlayerRadius: 2,
-        interPlayerRingRadius: 40,
-        sideRings: 3,
-        subdivision: 1,
-        mirrorSymmetric: false,
-      }, v4.config) as IslandMapSaveData['config'],
-      islands: v4.islands.map(s => ({
-        ...s,
-        params: Object.assign({
-          sideRings: 3,
-          subdivision: 1,
-        }, s.params) as SavedIsland['params'],
-      })),
-    };
+  } else if (raw2.version === 4 || raw2.version === 5) {
+    data = migrateLegacyIslandSave(raw as LegacyV4V5Save);
   } else {
     throw new Error(`Unsupported island save version: ${raw2.version}`);
   }
@@ -310,28 +408,30 @@ export async function applyIslandLoadedData(raw: unknown, ctx: IslandLoadContext
     ...ctx.islandMap.config,
     ...data.config,
     hubStyle: data.config.hubStyle as HubStyle,
-  };
+    shading: ctx.islandMap.config.shading,
+  } as IslandMap['config'];
 
   for (const sav of data.islands) {
-    const inst = createIslandMesh(sav.params, sav.id, sav.role);
+    const inst = createIslandMesh(sav.params, sav.id, sav.role, ctx.islandMap.config.shading);
+    const geo = inst.mesh.geometry;
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(sav.positions), 3));
+    if (sav.colors && sav.colors.length > 0) {
+      geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(sav.colors), 3));
+    }
+    if (sav.indices && sav.indices.length > 0) {
+      geo.setIndex(sav.indices);
+    }
+    geo.computeVertexNormals();
     inst.mesh.position.set(sav.pos[0], sav.pos[1], sav.pos[2]);
     if (sav.scale !== undefined) inst.mesh.scale.setScalar(sav.scale);
-    if (sav.vertexOverrides) {
-      const pos = inst.mesh.geometry.attributes['position'] as THREE.BufferAttribute;
-      for (const ov of sav.vertexOverrides) {
-        pos.setXYZ(ov.i, ov.x, ov.y, ov.z);
-      }
-      pos.needsUpdate = true;
-      inst.mesh.geometry.computeVertexNormals();
-    }
     if (sav.angularGroup) inst.mesh.userData['angularGroup'] = sav.angularGroup;
     ctx.scene.add(inst.mesh);
     ctx.islandMap.islands.push(inst);
   }
   ctx.islandMap.onChange();
 
-  ctx.lighting.applyMood(data.mood);
-  ctx.setMoodUI(data.mood);
+  ctx.lighting.applyConfig(data.lighting);
+  ctx.setLightingUI(data.lighting);
   ctx.setConfigUI(ctx.islandMap.config);
 
   if (data.glbModels?.length) {
@@ -368,6 +468,6 @@ export async function applyIslandLoadedData(raw: unknown, ctx: IslandLoadContext
 
 export function detectMapType(raw: unknown): 'plane' | 'island' {
   const d = raw as { version?: number; mapType?: string };
-  if (d?.mapType === 'island' || d?.version === 4 || d?.version === 5) return 'island';
+  if (d?.mapType === 'island' || d?.version === 4 || d?.version === 5 || d?.version === 6) return 'island';
   return 'plane';
 }

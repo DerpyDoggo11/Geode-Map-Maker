@@ -61,6 +61,10 @@ export class IslandSelection {
     this.flat = [];
   }
 
+  setHelperVisibility(visible: boolean): void {
+    if (this.points) this.points.visible = visible;
+  }
+
   sync(): void {
     if (!this.points) return;
     for (const isl of this.map.islands) isl.mesh.updateMatrixWorld(true);

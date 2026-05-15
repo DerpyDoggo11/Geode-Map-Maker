@@ -35,10 +35,9 @@ export interface MapConfig {
   interPlayerRingRadius: number;
 
   shapeNoise: number;
-  rimSegments: number;
-  rings: number;
-  sideRings: number;
+  targetEdge: number;
   subdivision: number;
+  shading: 'cel' | 'smooth';
 
   mirrorSymmetric: boolean;
 }
@@ -75,10 +74,9 @@ export const DEFAULT_MAP_CONFIG: MapConfig = {
   interPlayerRingRadius: 40,
 
   shapeNoise: 0.25,
-  rimSegments: 14,
-  rings: 3,
-  sideRings: 3,
+  targetEdge: 1.0,
   subdivision: 1,
+  shading: 'cel',
 
   mirrorSymmetric: true,
 };
@@ -90,9 +88,7 @@ function paramsFor(
 ): IslandShapeParams {
   return {
     ...DEFAULT_ISLAND_PARAMS,
-    rimSegments: config.rimSegments,
-    rings: config.rings,
-    sideRings: config.sideRings,
+    targetEdge: config.targetEdge,
     subdivision: config.subdivision,
     noiseAmount: config.shapeNoise,
     seed: config.seed + seedOffset,
@@ -136,7 +132,7 @@ export class IslandMap {
       z: number,
       angularGroup?: { size: number; index: number; baseRole: string; spokeIndex?: number },
     ): void => {
-      const isl = createIslandMesh(params, id, role);
+      const isl = createIslandMesh(params, id, role, cfg.shading);
       isl.mesh.position.set(x * S, y * S, z * S);
       isl.mesh.scale.setScalar(S);
       if (angularGroup) {

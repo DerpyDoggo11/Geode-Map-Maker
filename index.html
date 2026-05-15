@@ -13,6 +13,7 @@
         <button id="undoBtn" disabled>Undo</button>
         <button id="redoBtn" disabled>Redo</button>
       </div>
+      <button id="keybindsBtn" class="full">Keybinds (?)</button>
       <div class="hint">⌘/Ctrl+Z to undo, +Shift to redo.</div>
     </section>
 
@@ -96,11 +97,15 @@
       <div class="subhead">Geometry detail</div>
       <div class="row">
         <label>Shape noise</label><input id="islNoise" type="number" value="0.25" min="0" max="1" step="0.05">
-        <label>Rim segs</label><input id="islRimSegs" type="number" value="14" min="3" max="32" step="1">
-        <label>Top rings</label><input id="islRings" type="number" value="3" min="1" max="8" step="1">
-        <label>Side rings</label><input id="islSideRings" type="number" value="3" min="1" max="8" step="1">
+        <label>Target edge</label><input id="islTargetEdge" type="number" value="1.0" min="0.2" max="5" step="0.1">
         <label>Subdivision</label><input id="islSubdivision" type="number" value="1" min="1" max="4" step="1">
+        <label>Shading</label>
+        <select id="islShading">
+          <option value="cel" selected>Cel (toon)</option>
+          <option value="smooth">Smooth</option>
+        </select>
       </div>
+      <div class="hint">Target edge sets approximate triangle size across all islands. Lower = denser. Subdivision is a global multiplier.</div>
       <label class="check-row">
         <input id="islMirrorSymmetric" type="checkbox" checked> Symmetric islands (shared seed per group)
       </label>
@@ -126,12 +131,41 @@
     </section>
 
     <section>
-      <div class="group-title">Mood</div>
-      <div class="two-col">
+      <div class="group-title">Lighting</div>
+      <div class="subhead">Presets</div>
+      <div class="three-col">
+        <button data-mood="day" class="mood-btn active">Day</button>
         <button data-mood="dusk" class="mood-btn">Dusk</button>
-        <button data-mood="night" class="mood-btn active">Night</button>
+        <button data-mood="night" class="mood-btn">Night</button>
       </div>
-      <div class="hint">Cave-themed lighting; place lit buildings for warm pools.</div>
+
+      <div class="subhead">Sun</div>
+      <div class="row">
+        <label>Azimuth°</label><input id="lcSunAz" type="number" value="45" min="0" max="360" step="5">
+        <label>Elevation°</label><input id="lcSunEl" type="number" value="50" min="-90" max="90" step="5">
+        <label>Color</label><input id="lcSunColor" type="color" value="#fff4e8">
+        <label>Intensity</label><input id="lcSunInt" type="number" value="1.4" min="0" max="5" step="0.1">
+      </div>
+
+      <div class="subhead">Ambient (hemisphere)</div>
+      <div class="row">
+        <label>Sky color</label><input id="lcAmbSky" type="color" value="#b1d8ff">
+        <label>Ground color</label><input id="lcAmbGround" type="color" value="#5a4a3a">
+        <label>Intensity</label><input id="lcAmbInt" type="number" value="0.5" min="0" max="3" step="0.1">
+      </div>
+
+      <div class="subhead">Background &amp; fog</div>
+      <div class="row">
+        <label>Background</label><input id="lcBg" type="color" value="#cfe2ff">
+      </div>
+      <label class="check-row">
+        <input id="lcFogOn" type="checkbox"> Fog enabled
+      </label>
+      <div class="row">
+        <label>Fog color</label><input id="lcFogColor" type="color" value="#cfe2ff">
+        <label>Near</label><input id="lcFogNear" type="number" value="60" min="0" step="5">
+        <label>Far</label><input id="lcFogFar" type="number" value="200" min="10" step="10">
+      </div>
     </section>
 
     <section>
@@ -245,6 +279,17 @@
     <div id="selBox"></div>
     <div id="hud"></div>
     <div id="toast"></div>
+  </div>
+</div>
+
+<div id="keybindsModal" class="modal" hidden>
+  <div class="modal-backdrop"></div>
+  <div class="modal-card">
+    <div class="modal-header">
+      <span>Keybinds</span>
+      <button id="keybindsClose" class="modal-close">×</button>
+    </div>
+    <div id="keybindsContent" class="modal-body"></div>
   </div>
 </div>
 

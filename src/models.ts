@@ -11,6 +11,11 @@ interface BuiltinSpec {
   defaultLight?: AttachedLight;
 }
 
+/**
+ * Default light colors pull from the palette's warm row (magentas, pinks)
+ * so the lit pools around buildings read as the same "warm in cool dark"
+ * contrast as the reference image.
+ */
 const BUILTIN_SPECS: BuiltinSpec[] = [
   { name: 'Monolith1', url: '/models/monolith.glb' },
   { name: 'Monolith2', url: '/models/monolith2.glb' },

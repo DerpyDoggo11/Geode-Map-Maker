@@ -6,7 +6,7 @@ import { Terrain } from './terrain';
 import { Water } from './water';
 import { Selection } from './selection';
 import { ModelLibrary, attachLight } from './models';
-import { Lighting, type Mood } from './lighting';
+import { Lighting, moodToLighting, type Mood } from './lighting';
 import { History } from './history';
 import {
   HeightEditCommand,
@@ -27,7 +27,8 @@ import {
 } from './io';
 import { makeToast, buildTextureGrid, buildModelGrid, setupToolButtons } from './ui';
 import { byId, inputById } from './dom';
-import type { AttachedLight, ToolName, MapType, EditorState } from './types';
+import type { AttachedLight, ToolName, MapType, EditorState, LightingConfig } from './types';
+import { DEFAULT_LIGHTING } from './types';
 import { BrushCursor, stamp } from './brush';
 import { PreviewGhost } from './preview';
 import { siblingsOf, angularOffsetTo, rotateAroundY } from './mirror';
@@ -36,6 +37,7 @@ import type { IslandInstance } from './island';
 import { IslandMap, type HubStyle, type MapConfig } from './islandMap';
 import { IslandSelection } from './islandSelection';
 import { ViewModeController, type ViewMode } from './viewMode';
+import { KeybindRegistry, renderKeybindOverlay } from './keybinds';
 
 const viewport = byId('viewport');
 const hud = byId('hud');
@@ -91,11 +93,23 @@ const islInterCountEl = inputById('islInterCount');
 const islInterRadiusEl = inputById('islInterRadius');
 const islInterRingEl = inputById('islInterRing');
 const islNoiseEl = inputById('islNoise');
-const islRimSegsEl = inputById('islRimSegs');
-const islRingsEl = inputById('islRings');
-const islSideRingsEl = inputById('islSideRings');
+const islTargetEdgeEl = inputById('islTargetEdge');
 const islSubdivisionEl = inputById('islSubdivision');
+const islShadingEl = byId<HTMLSelectElement>('islShading');
 const islMirrorSymmetricEl = inputById('islMirrorSymmetric');
+
+const lcSunAzEl = inputById('lcSunAz');
+const lcSunElEl = inputById('lcSunEl');
+const lcSunColorEl = inputById('lcSunColor');
+const lcSunIntEl = inputById('lcSunInt');
+const lcAmbSkyEl = inputById('lcAmbSky');
+const lcAmbGroundEl = inputById('lcAmbGround');
+const lcAmbIntEl = inputById('lcAmbInt');
+const lcBgEl = inputById('lcBg');
+const lcFogOnEl = inputById('lcFogOn');
+const lcFogColorEl = inputById('lcFogColor');
+const lcFogNearEl = inputById('lcFogNear');
+const lcFogFarEl = inputById('lcFogFar');
 
 const undoBtn = byId<HTMLButtonElement>('undoBtn');
 const redoBtn = byId<HTMLButtonElement>('redoBtn');
@@ -131,6 +145,7 @@ history.onChange = (): void => {
 
 let mapW = 40, mapL = 40, density = 1;
 let currentMood: Mood = 'night';
+let currentLighting: LightingConfig = { ...DEFAULT_LIGHTING };
 
 function readMapInputs(): void {
   mapW = parseFloat(mapWEl.value) || 40;
@@ -171,10 +186,9 @@ function readIslandConfig(): MapConfig {
     interPlayerRadius: parseFloat(islInterRadiusEl.value) || 2,
     interPlayerRingRadius: parseFloat(islInterRingEl.value) || 40,
     shapeNoise: parseFloat(islNoiseEl.value) || 0.25,
-    rimSegments: parseInt(islRimSegsEl.value, 10) || 14,
-    rings: parseInt(islRingsEl.value, 10) || 3,
-    sideRings: parseInt(islSideRingsEl.value, 10) || 3,
+    targetEdge: parseFloat(islTargetEdgeEl.value) || 1.0,
     subdivision: parseInt(islSubdivisionEl.value, 10) || 1,
+    shading: islShadingEl.value as 'cel' | 'smooth',
     mirrorSymmetric: islMirrorSymmetricEl.checked,
   };
 }
@@ -204,10 +218,9 @@ function writeIslandConfigUI(cfg: MapConfig): void {
   islInterRadiusEl.value = String(cfg.interPlayerRadius);
   islInterRingEl.value = String(cfg.interPlayerRingRadius);
   islNoiseEl.value = String(cfg.shapeNoise);
-  islRimSegsEl.value = String(cfg.rimSegments);
-  islRingsEl.value = String(cfg.rings);
-  islSideRingsEl.value = String(cfg.sideRings);
+  islTargetEdgeEl.value = String(cfg.targetEdge);
   islSubdivisionEl.value = String(cfg.subdivision);
+  islShadingEl.value = cfg.shading;
   islMirrorSymmetricEl.checked = cfg.mirrorSymmetric;
 }
 
@@ -325,16 +338,15 @@ document.querySelectorAll<HTMLButtonElement>('.mood-btn').forEach(b => {
     b.classList.add('active');
     const mood = b.dataset['mood'] as Mood;
     currentMood = mood;
-    lighting.applyMood(mood);
+    const cfg = moodToLighting(mood);
+    currentLighting = cfg;
+    lighting.applyConfig(cfg);
+    writeLightingUI(cfg);
   };
 });
 
 document.querySelectorAll<HTMLButtonElement>('.view-btn').forEach(b => {
-  b.onclick = (): void => {
-    document.querySelectorAll('.view-btn').forEach(x => x.classList.remove('active'));
-    b.classList.add('active');
-    viewModeCtl.apply(b.dataset['view'] as ViewMode);
-  };
+  b.onclick = (): void => setActiveView(b.dataset['view'] as ViewMode);
 });
 
 function setMoodUI(m: Mood): void {
@@ -343,6 +355,60 @@ function setMoodUI(m: Mood): void {
     b.classList.toggle('active', b.dataset['mood'] === m);
   });
 }
+
+function readLightingUI(): LightingConfig {
+  return {
+    sunAzimuth: parseFloat(lcSunAzEl.value) || 0,
+    sunElevation: parseFloat(lcSunElEl.value) || 0,
+    sunColor: lcSunColorEl.value,
+    sunIntensity: parseFloat(lcSunIntEl.value) || 0,
+    ambientSkyColor: lcAmbSkyEl.value,
+    ambientGroundColor: lcAmbGroundEl.value,
+    ambientIntensity: parseFloat(lcAmbIntEl.value) || 0,
+    fogEnabled: lcFogOnEl.checked,
+    fogColor: lcFogColorEl.value,
+    fogNear: parseFloat(lcFogNearEl.value) || 0,
+    fogFar: parseFloat(lcFogFarEl.value) || 100,
+    backgroundColor: lcBgEl.value,
+  };
+}
+
+function writeLightingUI(cfg: LightingConfig): void {
+  lcSunAzEl.value = String(cfg.sunAzimuth);
+  lcSunElEl.value = String(cfg.sunElevation);
+  lcSunColorEl.value = cfg.sunColor;
+  lcSunIntEl.value = String(cfg.sunIntensity);
+  lcAmbSkyEl.value = cfg.ambientSkyColor;
+  lcAmbGroundEl.value = cfg.ambientGroundColor;
+  lcAmbIntEl.value = String(cfg.ambientIntensity);
+  lcFogOnEl.checked = cfg.fogEnabled;
+  lcFogColorEl.value = cfg.fogColor;
+  lcFogNearEl.value = String(cfg.fogNear);
+  lcFogFarEl.value = String(cfg.fogFar);
+  lcBgEl.value = cfg.backgroundColor;
+}
+
+function setLightingUI(cfg: LightingConfig): void {
+  currentLighting = { ...cfg };
+  writeLightingUI(cfg);
+  lighting.applyConfig(cfg);
+}
+
+const lightingInputs: HTMLInputElement[] = [
+  lcSunAzEl, lcSunElEl, lcSunColorEl, lcSunIntEl,
+  lcAmbSkyEl, lcAmbGroundEl, lcAmbIntEl,
+  lcBgEl, lcFogColorEl, lcFogNearEl, lcFogFarEl,
+];
+for (const el of lightingInputs) {
+  el.addEventListener('input', () => {
+    currentLighting = readLightingUI();
+    lighting.applyConfig(currentLighting);
+  });
+}
+lcFogOnEl.addEventListener('change', () => {
+  currentLighting = readLightingUI();
+  lighting.applyConfig(currentLighting);
+});
 
 function setActiveTool(t: ToolName): void {
   tool = t;
@@ -368,6 +434,9 @@ function setActiveView(v: ViewMode): void {
   document.querySelectorAll<HTMLButtonElement>('.view-btn').forEach(b => {
     b.classList.toggle('active', b.dataset['view'] === v);
   });
+  const showHelpers = v !== 'solid';
+  selection.setHelperVisibility(showHelpers);
+  islandSelection.setHelperVisibility(showHelpers);
 }
 
 let currentTexIdx = 0;
@@ -589,7 +658,12 @@ byId('saveBtn').onclick = (): void => {
     });
     downloadJSON(data);
   } else {
-    const data = buildIslandSaveData({ islandMap, models, mood: currentMood, editorState });
+    const data = buildIslandSaveData({
+      islandMap,
+      models,
+      lighting: currentLighting,
+      editorState,
+    });
     downloadJSON(data);
   }
   toast('Saved map.json');
@@ -611,7 +685,7 @@ inputById('loadFile').addEventListener('change', async e => {
         islandMap,
         models,
         lighting,
-        setMoodUI,
+        setLightingUI,
         setConfigUI: writeIslandConfigUI,
         rebuildSelection: () => {
           islandSelection.clear();
@@ -648,19 +722,87 @@ inputById('loadFile').addEventListener('change', async e => {
 undoBtn.onclick = (): void => history.undo();
 redoBtn.onclick = (): void => history.redo();
 
-window.addEventListener('keydown', (e: KeyboardEvent) => {
-  const target = e.target as HTMLElement | null;
-  if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')) return;
-  const mod = e.ctrlKey || e.metaKey;
-  if (!mod) return;
-  const key = e.key.toLowerCase();
-  if (key === 'z' && !e.shiftKey) {
-    e.preventDefault();
-    history.undo();
-  } else if ((key === 'z' && e.shiftKey) || key === 'y') {
-    e.preventDefault();
-    history.redo();
+const keybinds = new KeybindRegistry();
+
+function toggleKeybindsModal(force?: boolean): void {
+  const modal = byId('keybindsModal');
+  const willShow = force ?? modal.hasAttribute('hidden');
+  if (willShow) {
+    renderKeybindOverlay(keybinds, byId('keybindsContent'));
+    modal.removeAttribute('hidden');
+  } else {
+    modal.setAttribute('hidden', '');
   }
+}
+
+byId('keybindsBtn').onclick = (): void => toggleKeybindsModal(true);
+byId('keybindsClose').onclick = (): void => toggleKeybindsModal(false);
+byId('keybindsModal').querySelector<HTMLElement>('.modal-backdrop')!.onclick =
+  (): void => toggleKeybindsModal(false);
+
+keybinds.registerMany([
+  { key: '?', description: 'Show this menu', category: 'Help',
+    action: () => toggleKeybindsModal() },
+  { key: 'h', description: 'Show this menu', category: 'Help',
+    action: () => toggleKeybindsModal() },
+  { key: 'Escape', description: 'Close menus',
+    category: 'Help', action: () => toggleKeybindsModal(false) },
+
+  { key: 'z', mods: { ctrl: true, meta: true },
+    description: 'Undo', category: 'History',
+    action: () => history.undo() },
+  { key: 'z', mods: { ctrl: true, meta: true, shift: true },
+    description: 'Redo', category: 'History',
+    action: () => history.redo() },
+  { key: 'y', mods: { ctrl: true, meta: true },
+    description: 'Redo', category: 'History',
+    action: () => history.redo() },
+
+  { key: '1', description: 'Select tool', category: 'Tools',
+    action: () => setActiveTool('select') },
+  { key: '2', description: 'Orbit camera', category: 'Tools',
+    action: () => setActiveTool('orbit') },
+  { key: '3', description: 'Place model', category: 'Tools',
+    action: () => setActiveTool('place') },
+  { key: '4', description: 'Remove model', category: 'Tools',
+    action: () => setActiveTool('remove') },
+  { key: '5', description: 'Brush', category: 'Tools',
+    action: () => setActiveTool('brush') },
+
+  { key: 'a', description: 'Select all / clear', category: 'Selection',
+    action: () => byId<HTMLButtonElement>('selAll').click() },
+  { key: 'f', description: 'Flatten Y to average', category: 'Selection',
+    action: () => byId<HTMLButtonElement>('hFlat').click() },
+
+  { key: 'v', description: 'Cycle view mode (solid/wireframe/transparent)',
+    category: 'View',
+    action: () => {
+      const order: ViewMode[] = ['solid', 'wireframe', 'transparent'];
+      const next = order[(order.indexOf(viewModeCtl.mode) + 1) % order.length];
+      setActiveView(next);
+    } },
+
+  { key: 's', mods: { ctrl: true, meta: true },
+    description: 'Save map', category: 'File',
+    action: () => byId<HTMLButtonElement>('saveBtn').click() },
+  { key: 'o', mods: { ctrl: true, meta: true },
+    description: 'Load map', category: 'File',
+    action: () => byId<HTMLButtonElement>('loadBtn').click() },
+  { key: 'g', description: 'Generate islands (in Islands mode)',
+    category: 'File',
+    action: () => {
+      if (mapType === 'island') byId<HTMLButtonElement>('islGenerate').click();
+      else byId<HTMLButtonElement>('rebuild').click();
+    } },
+]);
+
+window.addEventListener('keydown', (e: KeyboardEvent) => {
+  if (e.key === 'Escape' && !byId('keybindsModal').hasAttribute('hidden')) {
+    toggleKeybindsModal(false);
+    e.preventDefault();
+    return;
+  }
+  keybinds.handle(e);
 });
 
 const raycaster = new THREE.Raycaster();

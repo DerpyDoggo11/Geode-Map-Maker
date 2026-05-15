@@ -48,6 +48,10 @@ export class Selection {
     this.points = null;
   }
 
+  setHelperVisibility(visible: boolean): void {
+    if (this.points) this.points.visible = visible;
+  }
+
   sync(): void {
     if (!this.points) return;
     const positions = this.terrain.positions;

@@ -6,9 +6,7 @@ export interface IslandShapeParams {
   seed: number;
   radius: number;
   noiseAmount: number;
-  rimSegments: number;
-  rings: number;
-  sideRings: number;
+  targetEdge: number;
   subdivision: number;
   topHeightVariation: number;
   depth: number;
@@ -19,11 +17,9 @@ export const DEFAULT_ISLAND_PARAMS: IslandShapeParams = {
   seed: 1,
   radius: 5,
   noiseAmount: 0.25,
-  rimSegments: 12,
-  rings: 3,
-  sideRings: 3,
+  targetEdge: 1.0,
   subdivision: 1,
-  topHeightVariation: 0.4,
+  topHeightVariation: 0.1,
   depth: 4,
   bottomTaper: 0.15,
 };
@@ -50,11 +46,13 @@ export function generateIslandGeometry(params: IslandShapeParams): IslandData {
   const rng = mulberry32(params.seed);
   const { radius, noiseAmount, topHeightVariation, depth, bottomTaper } = params;
   const sub = Math.max(1, Math.round(params.subdivision));
-  const rimSegments = Math.max(3, params.rimSegments * sub);
-  const rings = Math.max(1, params.rings * sub);
-  const sideRingCount = Math.max(1, params.sideRings * sub);
+  const edge = Math.max(0.2, params.targetEdge) / sub;
 
-  const baseSegments = Math.max(3, params.rimSegments);
+  const rimSegments = Math.max(6, Math.round((2 * Math.PI * radius) / edge));
+  const rings = Math.max(2, Math.round(radius / edge));
+  const sideRingCount = Math.max(2, Math.round(depth / edge));
+
+  const baseSegments = Math.max(6, Math.round(rimSegments / sub));
   const baseNoise: number[] = [];
   for (let i = 0; i < baseSegments; i++) {
     baseNoise.push((rng() - 0.5) * 2 * noiseAmount);
@@ -88,7 +86,7 @@ export function generateIslandGeometry(params: IslandShapeParams): IslandData {
       const rThis = rOuter * t;
       const x = Math.cos(angle) * rThis;
       const z = Math.sin(angle) * rThis;
-      const heightJitter = (rng() - 0.5) * 2 * topHeightVariation * (1 - t * 0.5) / sub;
+      const heightJitter = (rng() - 0.5) * 2 * topHeightVariation * (t * t) / sub;
       const y = centerY + heightJitter;
       positions.push(x, y, z);
       topVertexIndices.push(positions.length / 3 - 1);
@@ -202,13 +200,26 @@ export interface IslandInstance {
   role: 'player' | 'mid' | 'hub' | 'bridge';
 }
 
-export function createIslandMesh(params: IslandShapeParams, id: string, role: IslandInstance['role']): IslandInstance {
+export function createIslandMesh(
+  params: IslandShapeParams,
+  id: string,
+  role: IslandInstance['role'],
+  shading: 'cel' | 'smooth' = 'cel',
+): IslandInstance {
   const data = generateIslandGeometry(params);
-  const mat = new THREE.MeshToonMaterial({
-    vertexColors: true,
-    gradientMap: DEFAULT_TOON_GRADIENT,
-    side: THREE.DoubleSide,
-  });
+  const mat = shading === 'smooth'
+    ? new THREE.MeshStandardMaterial({
+        vertexColors: true,
+        side: THREE.DoubleSide,
+        roughness: 0.9,
+        metalness: 0.0,
+        flatShading: false,
+      })
+    : new THREE.MeshToonMaterial({
+        vertexColors: true,
+        gradientMap: DEFAULT_TOON_GRADIENT,
+        side: THREE.DoubleSide,
+      });
   const mesh = new THREE.Mesh(data.geometry, mat);
   mesh.userData['kind'] = 'island';
   mesh.userData['islandId'] = id;

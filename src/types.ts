@@ -97,20 +97,53 @@ export interface SavedIsland {
     seed: number;
     radius: number;
     noiseAmount: number;
-    rimSegments: number;
-    rings: number;
-    sideRings: number;
+    targetEdge: number;
     subdivision: number;
     topHeightVariation: number;
     depth: number;
     bottomTaper: number;
   };
-  vertexOverrides?: Array<{ i: number; x: number; y: number; z: number }>;
+  /** Baked vertex positions [x,y,z, x,y,z, ...] in local space. */
+  positions: number[];
+  /** Triangle index buffer. */
+  indices: number[];
+  /** Per-vertex colors [r,g,b, r,g,b, ...]. */
+  colors: number[];
   angularGroup?: { size: number; index: number; baseRole: string; spokeIndex?: number };
 }
 
+export interface LightingConfig {
+  sunAzimuth: number;
+  sunElevation: number;
+  sunColor: string;
+  sunIntensity: number;
+  ambientSkyColor: string;
+  ambientGroundColor: string;
+  ambientIntensity: number;
+  fogEnabled: boolean;
+  fogColor: string;
+  fogNear: number;
+  fogFar: number;
+  backgroundColor: string;
+}
+
+export const DEFAULT_LIGHTING: LightingConfig = {
+  sunAzimuth: 45,
+  sunElevation: 50,
+  sunColor: '#fff4e8',
+  sunIntensity: 1.4,
+  ambientSkyColor: '#b1d8ff',
+  ambientGroundColor: '#5a4a3a',
+  ambientIntensity: 0.5,
+  fogEnabled: false,
+  fogColor: '#cfe2ff',
+  fogNear: 60,
+  fogFar: 200,
+  backgroundColor: '#cfe2ff',
+};
+
 export interface IslandMapSaveData {
-  version: 5;
+  version: 6;
   mapType: 'island';
   config: {
     seed: number;
@@ -137,14 +170,12 @@ export interface IslandMapSaveData {
     interPlayerRadius: number;
     interPlayerRingRadius: number;
     shapeNoise: number;
-    rimSegments: number;
-    rings: number;
-    sideRings: number;
+    targetEdge: number;
     subdivision: number;
     mirrorSymmetric?: boolean;
   };
   islands: SavedIsland[];
-  mood: Mood;
+  lighting: LightingConfig;
   glbModels: SavedGLBModel[];
   placed: PlacedModelData[];
   editorState?: EditorState;
