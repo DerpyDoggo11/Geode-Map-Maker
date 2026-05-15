@@ -47,6 +47,7 @@ const TOOL_HINTS: Record<ToolName, string> = {
   orbit:  'Drag to orbit. Wheel to zoom.',
   place:  'Click ground to drop a model.',
   remove: 'Click a model to remove it.',
+  brush:  'Click & drag to scatter models.',
 };
 
 export function setupToolButtons(

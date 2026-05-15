@@ -37,6 +37,8 @@ export interface PlacedModelData {
   scale: number;
   /** Present when the user attached a light. */
   light?: AttachedLight;
+  /** Present when this model was placed as part of a mirror group. */
+  mirrorGroup?: string;
 }
 
 /** Persisted shape of an embedded GLB. */
@@ -46,7 +48,32 @@ export interface SavedGLBModel {
   b64: string;
 }
 
-/** Complete save file schema (v3 adds lights + mood). */
+/** Snapshot of the panel UI so the user picks up exactly where they left off. */
+export interface EditorState {
+  tool: 'select' | 'orbit' | 'place' | 'remove' | 'brush';
+  moveAxis: 'x' | 'y' | 'z';
+  moveStep: number;
+  hExact: number;
+  currentModelIndex: number;
+  currentTextureIndex: number;
+  modelYOffset: number;
+  modelScale: number;
+  modelRotation?: number;
+  mirrorEnabled?: boolean;
+  attachLight: boolean;
+  lightColor: string;
+  lightIntensity: number;
+  lightRange: number;
+  lightY: number;
+  brushRadius: number;
+  brushDensity: number;
+  brushScaleMin: number;
+  brushScaleMax: number;
+  brushSpacing: number;
+  viewMode: 'solid' | 'wireframe' | 'transparent';
+}
+
+/** Complete save file schema (v3 adds lights + mood; editorState optional, additive). */
 export interface SaveData {
   version: 3;
   map: { width: number; length: number; density: number };
@@ -58,6 +85,72 @@ export interface SaveData {
   mood: Mood;
   glbModels: SavedGLBModel[];
   placed: PlacedModelData[];
+  editorState?: EditorState;
 }
 
-export type ToolName = 'select' | 'orbit' | 'place' | 'remove';
+export interface SavedIsland {
+  id: string;
+  role: 'player' | 'mid' | 'hub' | 'bridge';
+  pos: [number, number, number];
+  scale?: number;
+  params: {
+    seed: number;
+    radius: number;
+    noiseAmount: number;
+    rimSegments: number;
+    rings: number;
+    sideRings: number;
+    subdivision: number;
+    topHeightVariation: number;
+    depth: number;
+    bottomTaper: number;
+  };
+  vertexOverrides?: Array<{ i: number; x: number; y: number; z: number }>;
+  angularGroup?: { size: number; index: number; baseRole: string; spokeIndex?: number };
+}
+
+export interface IslandMapSaveData {
+  version: 5;
+  mapType: 'island';
+  config: {
+    seed: number;
+    globalScale: number;
+    playerCount: number;
+    playerRingRadius: number;
+    playerIslandRadius: number;
+    playerIslandHeight: number;
+    hubStyle: string;
+    hubRadius: number;
+    hubIslandCount: number;
+    hubLobeRadius: number;
+    midIslandCount: number;
+    midRingRadius: number;
+    midIslandRadius: number;
+    midIslandHeight: number;
+    mid2IslandCount: number;
+    mid2RingRadius: number;
+    mid2IslandRadius: number;
+    mid2IslandHeight: number;
+    bridgeIslandsPerSpoke: number;
+    bridgeIslandRadius: number;
+    interPlayerCount: number;
+    interPlayerRadius: number;
+    interPlayerRingRadius: number;
+    shapeNoise: number;
+    rimSegments: number;
+    rings: number;
+    sideRings: number;
+    subdivision: number;
+    mirrorSymmetric?: boolean;
+  };
+  islands: SavedIsland[];
+  mood: Mood;
+  glbModels: SavedGLBModel[];
+  placed: PlacedModelData[];
+  editorState?: EditorState;
+}
+
+export type AnySaveData = SaveData | IslandMapSaveData;
+
+export type MapType = 'plane' | 'island';
+export type ToolName = 'select' | 'orbit' | 'place' | 'remove' | 'brush';

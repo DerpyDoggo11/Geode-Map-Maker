@@ -132,10 +132,33 @@ html, body {
 
 .tool-btn.active,
 .model-btn.active,
-.mood-btn.active {
+.mood-btn.active,
+.maptype-btn.active,
+.view-btn.active {
   background: var(--info-bg);
   color: var(--info-text);
   border-color: var(--info-border);
+}
+
+.subhead {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-top: 8px;
+  margin-bottom: 4px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+#panel select {
+  width: 100%;
+  padding: 4px 6px;
+  font-size: 12px;
+  height: 28px;
+  border: 0.5px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: white;
+  color: var(--text);
 }
 
 .tex-grid {

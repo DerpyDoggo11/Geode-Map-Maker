@@ -17,22 +17,121 @@
     </section>
 
     <section>
-      <div class="group-title">Map</div>
+      <div class="group-title">Map Type</div>
+      <div class="two-col">
+        <button data-maptype="plane" class="maptype-btn active">Plane</button>
+        <button data-maptype="island" class="maptype-btn">Islands</button>
+      </div>
+    </section>
+
+    <section id="planeSection">
+      <div class="group-title">Plane</div>
       <div class="row">
         <label>Width</label><input id="mapW" type="number" value="40" min="2" max="200" step="1">
         <label>Length</label><input id="mapL" type="number" value="40" min="2" max="200" step="1">
         <label>Density</label><input id="mapD" type="number" value="1" min="0.25" max="4" step="0.25">
       </div>
-      <button id="rebuild" class="full">Rebuild map</button>
+      <button id="rebuild" class="full">Rebuild plane</button>
+    </section>
+
+    <section id="islandSection" hidden>
+      <div class="group-title">Islands</div>
+      <div class="row">
+        <label>Seed</label><input id="islSeed" type="number" value="1" step="1">
+        <label>Global scale</label><input id="islScale" type="number" value="1" min="0.1" step="0.1">
+      </div>
+
+      <div class="subhead">Player ring</div>
+      <div class="row">
+        <label>Players</label><input id="islPlayers" type="number" value="8" min="2" max="16" step="1">
+        <label>Ring radius</label><input id="islPlayerRing" type="number" value="40" min="10" step="1">
+        <label>Island size</label><input id="islPlayerRadius" type="number" value="6" min="1" step="0.5">
+        <label>Island depth</label><input id="islPlayerDepth" type="number" value="3.5" min="0.5" step="0.5">
+      </div>
+
+      <div class="subhead">Hub</div>
+      <div class="row">
+        <label>Style</label>
+        <select id="islHubStyle">
+          <option value="single">Single big</option>
+          <option value="ring">Ring (separated)</option>
+          <option value="connected" selected>Connected (overlapping)</option>
+          <option value="cluster">Cluster (center+satellites)</option>
+          <option value="none">None</option>
+        </select>
+        <label>Spread radius</label><input id="islHubRadius" type="number" value="10" min="1" step="0.5">
+        <label>Lobe count</label><input id="islHubCount" type="number" value="4" min="1" max="12" step="1">
+        <label>Lobe size</label><input id="islHubLobe" type="number" value="4" min="1" step="0.5">
+      </div>
+
+      <div class="subhead">Mid ring 1</div>
+      <div class="row">
+        <label>Count</label><input id="islMidCount" type="number" value="8" min="0" max="16" step="1">
+        <label>Ring radius</label><input id="islMidRing" type="number" value="22" min="0" step="1">
+        <label>Island size</label><input id="islMidRadius" type="number" value="3.5" min="0.5" step="0.5">
+        <label>Island depth</label><input id="islMidDepth" type="number" value="2.5" min="0.5" step="0.5">
+      </div>
+
+      <div class="subhead">Mid ring 2 (optional)</div>
+      <div class="row">
+        <label>Count</label><input id="islMid2Count" type="number" value="0" min="0" max="16" step="1">
+        <label>Ring radius</label><input id="islMid2Ring" type="number" value="30" min="0" step="1">
+        <label>Island size</label><input id="islMid2Radius" type="number" value="2.5" min="0.5" step="0.5">
+        <label>Island depth</label><input id="islMid2Depth" type="number" value="2" min="0.5" step="0.5">
+      </div>
+
+      <div class="subhead">Bridges (hub→player)</div>
+      <div class="row">
+        <label>Per spoke</label><input id="islBridgeCount" type="number" value="2" min="0" max="8" step="1">
+        <label>Size</label><input id="islBridgeRadius" type="number" value="1.5" min="0.3" step="0.1">
+      </div>
+
+      <div class="subhead">Inter-player (between bases)</div>
+      <div class="row">
+        <label>Per gap</label><input id="islInterCount" type="number" value="0" min="0" max="6" step="1">
+        <label>Size</label><input id="islInterRadius" type="number" value="2" min="0.3" step="0.1">
+        <label>Ring radius</label><input id="islInterRing" type="number" value="40" min="5" step="0.5">
+      </div>
+
+      <div class="subhead">Geometry detail</div>
+      <div class="row">
+        <label>Shape noise</label><input id="islNoise" type="number" value="0.25" min="0" max="1" step="0.05">
+        <label>Rim segs</label><input id="islRimSegs" type="number" value="14" min="3" max="32" step="1">
+        <label>Top rings</label><input id="islRings" type="number" value="3" min="1" max="8" step="1">
+        <label>Side rings</label><input id="islSideRings" type="number" value="3" min="1" max="8" step="1">
+        <label>Subdivision</label><input id="islSubdivision" type="number" value="1" min="1" max="4" step="1">
+      </div>
+      <label class="check-row">
+        <input id="islMirrorSymmetric" type="checkbox" checked> Symmetric islands (shared seed per group)
+      </label>
+
+      <button id="islGenerate" class="full">Generate map</button>
+    </section>
+
+    <section id="viewModeSection" hidden>
+      <div class="group-title">View</div>
+      <div class="three-col">
+        <button data-view="solid" class="view-btn active">Solid</button>
+        <button data-view="wireframe" class="view-btn">Wireframe</button>
+        <button data-view="transparent" class="view-btn">Transparent</button>
+      </div>
+    </section>
+
+    <section id="mirrorSection" hidden>
+      <div class="group-title">Mirroring</div>
+      <label class="check-row">
+        <input id="mirrorEnabled" type="checkbox" checked> Mirror edits across symmetry
+      </label>
+      <div class="hint">Affects player/mid/bridge islands. Hub is unaffected.</div>
     </section>
 
     <section>
       <div class="group-title">Mood</div>
-      <div class="three-col">
+      <div class="two-col">
         <button data-mood="dusk" class="mood-btn">Dusk</button>
         <button data-mood="night" class="mood-btn active">Night</button>
       </div>
-      <div class="hint">Night makes building lights pop.</div>
+      <div class="hint">Cave-themed lighting; place lit buildings for warm pools.</div>
     </section>
 
     <section>
@@ -50,6 +149,7 @@
         <button data-tool="select" class="tool-btn active">Select</button>
         <button data-tool="orbit" class="tool-btn">Orbit</button>
         <button data-tool="place" class="tool-btn">Place</button>
+        <button data-tool="brush" class="tool-btn">Brush</button>
         <button data-tool="remove" class="tool-btn">Remove</button>
       </div>
       <div class="hint" id="toolHint">Drag to box-select. Shift to add.</div>
@@ -57,20 +157,29 @@
 
     <section>
       <div class="group-title">
-        Height <span id="selCount" class="faint">(0 selected)</span>
+        Move vertices <span id="selCount" class="faint">(0 selected)</span>
+      </div>
+      <div class="row">
+        <label>Axis</label>
+        <select id="moveAxis">
+          <option value="y" selected>Y (up/down)</option>
+          <option value="x">X</option>
+          <option value="z">Z</option>
+        </select>
+        <label>Step</label><input id="moveStep" type="number" value="1" step="0.1">
       </div>
       <div class="four-col">
-        <button id="hUp">+1</button>
-        <button id="hDown">-1</button>
+        <button id="hUp">+step</button>
+        <button id="hDown">-step</button>
         <button id="hUpS">+0.1</button>
         <button id="hDownS">-0.1</button>
       </div>
       <div class="exact-row">
-        <label>Set to</label>
+        <label>Set Y</label>
         <input id="hExact" type="number" value="0" step="0.5">
         <button id="hApply">Set</button>
       </div>
-      <button id="hFlat" class="full">Flatten to average</button>
+      <button id="hFlat" class="full">Flatten Y to average</button>
       <button id="selAll" class="full">Select all / clear</button>
     </section>
 
@@ -88,6 +197,13 @@
       <div class="row">
         <label>Y offset</label><input id="mY" type="number" value="0" step="0.1">
         <label>Scale</label><input id="mScale" type="number" value="1" step="0.1" min="0.05">
+        <label>Rotation Y°</label><input id="mRotation" type="number" value="0" step="15">
+      </div>
+      <div class="four-col">
+        <button id="rotLeft" title="Rotate −15° (Q)">↺ −15°</button>
+        <button id="rotRight" title="Rotate +15° (E)">↻ +15°</button>
+        <button id="rotRandom" title="Randomize rotation (R)">Random</button>
+        <button id="rotReset" title="Reset rotation (T)">Reset</button>
       </div>
       <label class="check-row">
         <input id="attachLight" type="checkbox"> Attach light when placing
@@ -99,6 +215,18 @@
         <label>Y above origin</label><input id="lightY" type="number" value="1.2" step="0.1">
       </div>
       <div class="hint">Place mode: click ground. Remove mode: click a model.</div>
+    </section>
+
+    <section>
+      <div class="group-title">Brush</div>
+      <div class="row">
+        <label>Radius</label><input id="brushRadius" type="number" value="3" min="0.5" max="30" step="0.5">
+        <label>Density</label><input id="brushDensity" type="number" value="0.5" min="0.05" max="5" step="0.05">
+        <label>Scale min</label><input id="brushScaleMin" type="number" value="0.8" min="0.1" step="0.1">
+        <label>Scale max</label><input id="brushScaleMax" type="number" value="1.2" min="0.1" step="0.1">
+        <label>Spacing</label><input id="brushSpacing" type="number" value="1.0" min="0.1" step="0.1">
+      </div>
+      <div class="hint">Brush mode: click & drag to scatter the selected model.</div>
     </section>
 
     <section>

@@ -11,19 +11,23 @@ interface BuiltinSpec {
   defaultLight?: AttachedLight;
 }
 
-/**
- * Default light colors pull from the palette's warm row (magentas, pinks)
- * so the lit pools around buildings read as the same "warm in cool dark"
- * contrast as the reference image.
- */
 const BUILTIN_SPECS: BuiltinSpec[] = [
-  { name: 'Monolith', url: '/models/monolith.glb' },
+  { name: 'Monolith1', url: '/models/monolith.glb' },
+  { name: 'Monolith2', url: '/models/monolith2.glb' },
+  { name: 'Monolith3', url: '/models/monolith3.glb' },
   { name: 'Crystal',  url: '/models/crystal.glb',
     defaultLight: { color: 0xd977a4, intensity: 5, range: 7, offset: [0, 1.1, 0] } },
   { name: 'Crystal2', url: '/models/crystal2.glb',
     defaultLight: { color: 0xb63f83, intensity: 5, range: 6, offset: [0, 1.0, 0] } },
   { name: 'Crystal3', url: '/models/crystal3.glb',
     defaultLight: { color: 0xe8a4c2, intensity: 6, range: 8, offset: [0, 2.5, 0] } },
+  { name: 'Crystal Oscillator', url: '/models/oscillator.glb' },
+  { name: 'Shop1', url: '/models/shop1.glb' },
+  { name: 'Shop2', url: '/models/shop2.glb' },
+  { name: 'Shopkeeper1', url: '/models/shopkeeper1.glb' },
+  { name: 'Shopkeeper2', url: '/models/shopkeeper2.glb' },
+  { name: 'Spikey', url: '/models/spikey.glb' },
+  { name: 'SpikeyFence', url: '/models/spikeyfence.glb' },
 ];
 
 /**
@@ -207,12 +211,14 @@ export class ModelLibrary {
     yOffset: number,
     scale: number,
     withLight: boolean,
+    rotationY = 0,
   ): THREE.Object3D | null {
     const def = this.defs[defIndex];
     if (!def) return null;
     const m = def.build();
     m.position.set(worldPoint.x, worldPoint.y + yOffset, worldPoint.z);
     m.scale.setScalar(scale);
+    m.rotation.y = rotationY;
     m.userData['kind'] = 'model';
     m.userData['defIndex'] = defIndex;
     if (withLight && def.defaultLight) attachLight(m, def.defaultLight);

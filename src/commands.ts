@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import type { Command } from './history';
 import type { Terrain } from './terrain';
 import type { ModelLibrary } from './models';
+import type { IslandMap } from './islandMap';
+import type { VertRef } from './islandSelection';
 
 /**
  * Edit the height of a set of vertices. Stores per-vertex before/after so
@@ -109,5 +111,121 @@ export class RemoveModelCommand implements Command {
   undo(): void {
     this.models.scene.add(this.obj);
     this.models.placed.add(this.obj);
+  }
+}
+
+export class BrushStrokeCommand implements Command {
+  label = 'Brush stroke';
+  private models: ModelLibrary;
+  private objs: THREE.Object3D[];
+
+  constructor(models: ModelLibrary, objs: THREE.Object3D[]) {
+    this.models = models;
+    this.objs = objs;
+  }
+
+  do(): void {
+    for (const o of this.objs) {
+      this.models.scene.add(o);
+      this.models.placed.add(o);
+    }
+  }
+  undo(): void {
+    for (const o of this.objs) {
+      this.models.scene.remove(o);
+      this.models.placed.delete(o);
+    }
+  }
+}
+
+export class VertexMoveCommand implements Command {
+  label = 'Move vertices';
+  private map: IslandMap;
+  private refs: VertRef[];
+  private before: THREE.Vector3[];
+  private after: THREE.Vector3[];
+  private onAfter: () => void;
+
+  constructor(
+    map: IslandMap,
+    refs: VertRef[],
+    before: THREE.Vector3[],
+    after: THREE.Vector3[],
+    onAfter: () => void,
+  ) {
+    this.map = map;
+    this.refs = refs;
+    this.before = before;
+    this.after = after;
+    this.onAfter = onAfter;
+  }
+
+  do(): void { this.apply(this.after); }
+  undo(): void { this.apply(this.before); }
+
+  private apply(arr: THREE.Vector3[]): void {
+    const touched = new Set<string>();
+    for (let k = 0; k < this.refs.length; k++) {
+      const ref = this.refs[k];
+      const isl = this.map.findById(ref.islandId);
+      if (!isl) continue;
+      const pos = isl.mesh.geometry.attributes['position'] as THREE.BufferAttribute;
+      const v = arr[k];
+      pos.setXYZ(ref.vertIndex, v.x, v.y, v.z);
+      touched.add(ref.islandId);
+    }
+    for (const id of touched) {
+      const isl = this.map.findById(id);
+      if (!isl) continue;
+      (isl.mesh.geometry.attributes['position'] as THREE.BufferAttribute).needsUpdate = true;
+      isl.mesh.geometry.computeVertexNormals();
+    }
+    this.onAfter();
+  }
+}
+
+export class RotateModelCommand implements Command {
+  label = 'Rotate model';
+  private objs: THREE.Object3D[];
+  private before: number[];
+  private after: number[];
+
+  constructor(objs: THREE.Object3D[], rotation: number, relative: boolean) {
+    this.objs = objs;
+    this.before = objs.map(o => o.rotation.y);
+    this.after = relative
+      ? this.before.map(b => b + rotation)
+      : objs.map(() => rotation);
+  }
+
+  do(): void {
+    for (let i = 0; i < this.objs.length; i++) this.objs[i].rotation.y = this.after[i];
+  }
+  undo(): void {
+    for (let i = 0; i < this.objs.length; i++) this.objs[i].rotation.y = this.before[i];
+  }
+}
+
+export class RemoveMultipleCommand implements Command {
+  label = 'Remove models';
+  private models: ModelLibrary;
+  private objs: THREE.Object3D[];
+
+  constructor(models: ModelLibrary, objs: THREE.Object3D[]) {
+    this.models = models;
+    this.objs = objs;
+  }
+
+  do(): void {
+    for (const o of this.objs) {
+      this.models.scene.remove(o);
+      this.models.placed.delete(o);
+    }
+  }
+  undo(): void {
+    for (const o of this.objs) {
+      this.models.scene.add(o);
+      this.models.placed.add(o);
+    }
   }
 }
